@@ -6,6 +6,7 @@ class Coordinate
   end
   
   def angle(coordinate)
+    # cleanup
     delta_x = coordinate.x - self.x
     delta_y = coordinate.y - self.y
     local_angle = Math.atan(delta_y/delta_x).abs
@@ -16,7 +17,8 @@ class Coordinate
     elsif delta_x < 0 && delta_y > 0
       local_angle = 3.1415 - local_angle
     end
-    return local_angle
+    # original angle starts at 12:00 instead of 1st quadrant... need to normalize this
+    return (local_angle - 3.1415/2.0).abs % (3.1415*2.0)
   end
   
   

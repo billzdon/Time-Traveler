@@ -259,8 +259,8 @@ module ActiveRecord
           if self.k_nearest
             point = next_guessed_point!(self.recommended_distance)
           else
-            # keep this 10 hardcoded so that people don't mess with it and put super high res, making this app a burden
-            while kept_point.nil? && self.perimeter_points.length < 10
+            # keep this 20 hardcoded so that people don't mess with it and put super high res, making this app a burden
+            while kept_point.nil? && self.perimeter_points.length < 20
               point = next_point!(self.recommended_distance)
               point.update_attributes({:duration => self.class::time_parser((self.map.parent.route_to(point.address)))})
               #if !point.duration # invalid point
@@ -281,6 +281,7 @@ module ActiveRecord
           self.map.k_nearest_maps.each do |nearby_map|
             nearby_map_coordinate = Coordinate.new(nearby_map.parent.latitude_call, nearby_map.parent.longitude_call)
             angle_to_point = nearby_map_coordinate.angle(coordinate)
+            puts angle_to_point 
             points = nearby_map.kept_points.sort_by_angle_difference(angle_to_point)
             point = self.class::coordinate_for_distance(self.map.parent.latitude_call, self.map.parent.longitude_call, points.first.radius, self.angle)
             point.update_attributes({:kept => true, :point_region => self, :required_maximum => self.required_maximum})

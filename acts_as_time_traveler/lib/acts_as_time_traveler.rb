@@ -72,7 +72,7 @@ module ActiveRecord
         
         def find_map(options = {})
           # duration is the only finder right now
-          found = map_instances.select {|map_instance| map_instance.duration = options[:duration]}
+          found = map_instances.select {|map_instance| map_instance.duration == options[:duration]}
           options[:first] ? found.first : found
         end
         

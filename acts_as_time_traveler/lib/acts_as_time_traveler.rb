@@ -260,7 +260,7 @@ module ActiveRecord
             point = next_guessed_point!(self.recommended_distance)
           else
             # keep this 10 hardcoded so that people don't mess with it and put super high res, making this app a burden
-            while kept_point.nil? && self.perimeter_points.length < 20
+            while kept_point.nil? && self.perimeter_points.length < 10
               point = next_point!(self.recommended_distance)
               point.update_attributes({:duration => self.class::time_parser((self.map.parent.route_to(point.address)))})
               #if !point.duration # invalid point

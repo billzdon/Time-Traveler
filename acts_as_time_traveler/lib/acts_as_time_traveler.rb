@@ -72,7 +72,7 @@ module ActiveRecord
         
         def find_map(options = {})
           # duration is the only finder right now
-          found = map_instances.select {|map_instance| map_instance.duration == options[:duration]}
+          found = map_instances.select {|map_instance| map_instance.duration = options[:duration]}
           options[:first] ? found.first : found
         end
         
@@ -142,10 +142,10 @@ module ActiveRecord
           lng = lng.to_radians
           radial_distance = distance / 3995.0
           
-          dest_lat = Math.asin(Math.sin(lat) * Math.cos(radial_distance) + Math.cos(lat) * Math.sin(radial_distance) * Math.cos(angle))
+          dest_lat = Math.asin(Math.sin(lat) * Math.cos(radial_distance) + Math.cos(lat) * Math.sin(radial_distance) * Math.sin(angle))
           dest_lng = lng
           unless Math.cos(lat) == 0
-            dest_lng = ((lng - Math.asin(Math.sin(angle) * Math.sin(radial_distance)/Math.cos(lat)) + 3.1415) % (2 * 3.1415)) - 3.1415          else
+            dest_lng = ((lng + Math.asin(Math.cos(angle) * Math.sin(radial_distance)/Math.cos(lat)) + 3.1415) % (2 * 3.1415)) - 3.1415
           end
 
           return PerimeterPoint.new({:latitude => dest_lat.to_degrees, :longitude => dest_lng.to_degrees, :radius => distance, :angle => angle})
@@ -154,8 +154,9 @@ module ActiveRecord
         def time_parser(time)
           begin
             translator = {'mins' => 60, 'secs' => 1}
-            multiplier = time.split(' ')[0]
-            category = time.split(' ')[1]
+            split_time = time.split(' ')
+            multiplier = split_time[0]
+            category = split_time[1]
             translator[category] * multiplier.to_i 
           rescue
             # cannot parse the time correctly, probably ocean or mountain or non-road area
@@ -281,7 +282,6 @@ module ActiveRecord
           self.map.k_nearest_maps.each do |nearby_map|
             nearby_map_coordinate = Coordinate.new(nearby_map.parent.latitude_call, nearby_map.parent.longitude_call)
             angle_to_point = nearby_map_coordinate.angle(coordinate)
-            puts angle_to_point 
             points = nearby_map.kept_points.sort_by_angle_difference(angle_to_point)
             point = self.class::coordinate_for_distance(self.map.parent.latitude_call, self.map.parent.longitude_call, points.first.radius, self.angle)
             point.update_attributes({:kept => true, :point_region => self, :required_maximum => self.required_maximum})
@@ -396,7 +396,7 @@ class Hash
 end
 
 class Array
-  def sort_by_angle_difference(angle, opts={})
-    self.sort!{|a,b|(a.send(:angle) - angle).abs <=> (b.send(:angle) - angle).abs}
+  def sort_by_angle_difference(angle, options = {})
+    self.sort!{|a,b|[(a.send(:angle) - angle).abs, (a.send(:angle) - (angle + 3.1415 * 2)).abs].min <=> [(b.send(:angle) - angle).abs, (a.send(:angle) - (angle + 2 * 3.1415)).abs].min}
   end
 end

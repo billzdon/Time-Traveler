@@ -17,7 +17,7 @@ module ActiveRecord
           cattr_accessor_with_default("distance_for_duration_average", {300 => 1.5, 420 => 2, 600 => 3, 900 => 5})
           cattr_accessor_with_default("angle_stepper", 0.4)
           cattr_accessor_with_default("duration_threshold", 1.0)
-          cattr_accessor_with_default("k_value", 1)
+          cattr_accessor_with_default("k_value", 2)
 
           require 'net/http'
           include Geokit::Geocoders
@@ -133,7 +133,7 @@ module ActiveRecord
         
         def distance_between_coordinates(lat1, lat2, lng1, lng2)
           # this method will find distance between a lat and lng
-          Math.acos(Math.sin(lat1) * Math.sin(lat2) + Math.cos(lat1) * Math.cos(lat2) * Math.cos(lng1 - lng2)) * (2 * 3.1415 * 3995 / 360)
+          Math.acos(Math.sin(lat1) * Math.sin(lat2) + Math.cos(lat1) * Math.cos(lat2) * Math.cos(lng1 - lng2)) * (2 * Math::PI * 3995 / 360)
         end
 
         # this method will take a point and find another point that is a certain distance away at a particular angle
@@ -145,7 +145,7 @@ module ActiveRecord
           dest_lat = Math.asin(Math.sin(lat) * Math.cos(radial_distance) + Math.cos(lat) * Math.sin(radial_distance) * Math.sin(angle))
           dest_lng = lng
           unless Math.cos(lat) == 0
-            dest_lng = ((lng + Math.asin(Math.cos(angle) * Math.sin(radial_distance)/Math.cos(lat)) + 3.1415) % (2 * 3.1415)) - 3.1415
+            dest_lng = ((lng + Math.asin(Math.cos(angle) * Math.sin(radial_distance)/Math.cos(lat)) + Math::PI) % (2 * Math::PI)) - Math::PI
           end
 
           return PerimeterPoint.new({:latitude => dest_lat.to_degrees, :longitude => dest_lng.to_degrees, :radius => distance, :angle => angle})
@@ -185,7 +185,7 @@ module ActiveRecord
           else
             current_angle = 0
           
-            while (current_angle < (3.1415 * 2 - self.angle_stepper))
+            while (current_angle < (Math::PI * 2 - self.angle_stepper))
               self.point_regions << PointRegion.new({:map => self, 
                                                     :angle => current_angle, 
                                                     :duration_threshold => duration_threshold, 
@@ -221,7 +221,7 @@ module ActiveRecord
           
           current_angle = 0
         
-          while (current_angle < (3.1415 * 2 - self.angle_stepper))
+          while (current_angle < (Math::PI * 2 - self.angle_stepper))
             self.point_regions << PointRegion.new({:map => self, 
                                                   :angle => current_angle, 
                                                   :duration_threshold => duration_threshold, 
@@ -230,8 +230,6 @@ module ActiveRecord
             current_angle = current_angle + self.angle_stepper
           end
           
-          
-          #self.keeper_points = self.deserialize_map
           self.keeper_points = self.point_regions.collect {|region| region.kept_point}.compact
         end
         
@@ -261,7 +259,7 @@ module ActiveRecord
             point = next_guessed_point!(self.recommended_distance)
           else
             # keep this 20 hardcoded so that people don't mess with it and put super high res, making this app a burden
-            while kept_point.nil? && self.perimeter_points.length < 20
+            while kept_point.nil? && self.perimeter_points.length < 10
               point = next_point!(self.recommended_distance)
               point.update_attributes({:duration => self.class::time_parser((self.map.parent.route_to(point.address)))})
               #if !point.duration # invalid point
@@ -279,15 +277,18 @@ module ActiveRecord
         def next_guessed_point!(distance = nil)
           point = self.class::coordinate_for_distance(self.map.parent.latitude_call, self.map.parent.longitude_call, distance, self.angle)
           coordinate = Coordinate.new(point.latitude, point.longitude)
+          distances = []
           self.map.k_nearest_maps.each do |nearby_map|
             nearby_map_coordinate = Coordinate.new(nearby_map.parent.latitude_call, nearby_map.parent.longitude_call)
             angle_to_point = nearby_map_coordinate.angle(coordinate)
             points = nearby_map.kept_points.sort_by_angle_difference(angle_to_point)
-            point = self.class::coordinate_for_distance(self.map.parent.latitude_call, self.map.parent.longitude_call, points.first.radius, self.angle)
-            point.update_attributes({:kept => true, :point_region => self, :required_maximum => self.required_maximum})
-            self.perimeter_points << point
-            return point # return first point for now (1 map only)
+            distances << points.first.radius
           end
+          average_distance = distances.inject(0,&:+) / distances.length
+          point = self.class::coordinate_for_distance(self.map.parent.latitude_call, self.map.parent.longitude_call, average_distance, self.angle)
+          point.update_attributes({:kept => true, :point_region => self, :required_maximum => self.required_maximum})
+          self.perimeter_points << point
+          return point
         end
         
         # if there is a required max point, use the distance here regardless
@@ -374,11 +375,11 @@ end
 
 class Float
   def to_radians
-    self / 180.0 * 3.1415
+    self / 180.0 * Math::PI
   end
   
   def to_degrees
-    self / 3.1415 * 180.0
+    self / Math::PI * 180.0
   end
 end
 
@@ -397,6 +398,6 @@ end
 
 class Array
   def sort_by_angle_difference(angle, options = {})
-    self.sort!{|a,b|[(a.send(:angle) - angle).abs, (a.send(:angle) - (angle + 3.1415 * 2)).abs].min <=> [(b.send(:angle) - angle).abs, (a.send(:angle) - (angle + 2 * 3.1415)).abs].min}
+    self.sort!{|a,b|[(a.send(:angle) - angle).abs, (a.send(:angle) - (angle + Math::PI * 2)).abs].min <=> [(b.send(:angle) - angle).abs, (a.send(:angle) - (angle + 2 * Math::PI)).abs].min}
   end
 end

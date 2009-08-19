@@ -22,7 +22,6 @@ module ActiveRecord
           require 'net/http'
           include Geokit::Geocoders
           require 'coordinate'
-          #include Coordinate
           include ActiveRecord::Acts::TimeTraveler::InstanceMethods
           extend ActiveRecord::Acts::TimeTraveler::SingletonMethods
           
@@ -171,7 +170,7 @@ module ActiveRecord
       # named to avoid conflicts with map as an object in rails project
       class MapInstance
         attr_accessor :point_regions, :duration, :keeper_points, :parent, :angle_stepper, :frequent_flier_miles_klass, :duration_threshold, :k_nearest, :k_nearest_maps, :k_nearest_average, :k_nearest_points
-        
+                
         def initialize(options = {})
           options.each_pair do |key, value|
             self.send("#{key}=", value) if self.respond_to?("#{key}=")
@@ -183,6 +182,8 @@ module ActiveRecord
           if options[:retrieve] && !self.frequent_flier_miles_klass.nil?
             self.keeper_points = self.deserialize_map
           else
+            k_nearest_setup
+            
             current_angle = 0
           
             while (current_angle < (Math::PI * 2 - self.angle_stepper))
@@ -192,7 +193,7 @@ module ActiveRecord
                                                     :recommended_distance => (self.point_regions.last.kept_point.radius rescue parent.distance_for_duration_average[self.duration])})
               current_angle = current_angle + self.angle_stepper
             end
-
+            
             self.keeper_points = self.point_regions.collect {|region| region.kept_point}.compact
             
             serialize_map if options[:save] && !self.frequent_flier_miles_klass.nil?
@@ -214,11 +215,13 @@ module ActiveRecord
                                             :points => Base64.encode64(Marshal.dump(keeper_points))})
         end
         
-        def use_k_nearest
+        def k_nearest_setup
           self.k_nearest_maps = self.parent.class.nearest_mapped_addresses(self.parent).collect {|address| address.maps.select {|map| map.duration == self.duration}}.flatten
           self.k_nearest_points = self.k_nearest_maps.collect {|nearby_map| nearby_map.kept_points}.compact.flatten
           self.k_nearest_average = self.k_nearest_points.inject(0.0) {|sum, point| sum + point.radius}/self.k_nearest_points.length.to_f
-          
+        end
+              
+        def use_k_nearest
           current_angle = 0
         
           while (current_angle < (Math::PI * 2 - self.angle_stepper))
@@ -233,9 +236,15 @@ module ActiveRecord
           self.keeper_points = self.point_regions.collect {|region| region.kept_point}.compact
         end
         
+        def use_k_nearest_with_k_nearest_setup
+          k_nearest_setup
+          use_k_nearest_without_k_nearest_setup
+        end
+        
+        alias_method_chain :use_k_nearest, :k_nearest_setup
+        
         private
 
-        
         def next_angle
           self.point_regions.last.angle + self.angle_stepper
         end
@@ -254,18 +263,20 @@ module ActiveRecord
           self.recommended_distance = options[:recommended_distance] || nil
           self.required_maximum = options[:required_maximum] || false
           self.k_nearest = options[:k_nearest] || false
+
+          #point = next_guessed_point!(self.recommended_distance)
           
           if self.k_nearest
-            point = next_guessed_point!(self.recommended_distance)
+            point.update_attributes({:kept => true})
           else
-            # keep this 20 hardcoded so that people don't mess with it and put super high res, making this app a burden
+            # keep this hardcoded so that people don't mess with it and put super high res, making this app a burden
             while kept_point.nil? && self.perimeter_points.length < 10
-              point = next_point!(self.recommended_distance)
+              point = next_point!((point.radius rescue self.recommended_distance))
               point.update_attributes({:duration => self.class::time_parser((self.map.parent.route_to(point.address)))})
-              #if !point.duration # invalid point
-              #  self.required_maximum = true
-              #  self.recommended_distance = point.radius - 0.05
-              #end
+              if !point.duration # invalid point
+                self.required_maximum = true
+                self.recommended_distance = point.radius - 0.05
+              end
             end
           end
         end
@@ -286,7 +297,7 @@ module ActiveRecord
           end
           average_distance = distances.inject(0,&:+) / distances.length
           point = self.class::coordinate_for_distance(self.map.parent.latitude_call, self.map.parent.longitude_call, average_distance, self.angle)
-          point.update_attributes({:kept => true, :point_region => self, :required_maximum => self.required_maximum})
+          point.update_attributes({:point_region => self, :required_maximum => self.required_maximum})
           self.perimeter_points << point
           return point
         end

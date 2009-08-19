@@ -1,0 +1,64 @@
+THE MODEL
+
+class Address < ActiveRecord::Base
+  acts_as_time_traveler
+  
+  frequent_flier_miles({:klass => Map})
+  
+  has_many :maps, :as => :parent
+end
+
+HERE IS A SAMPLE VIEW, ADJUST ZOOM ACCORDINGLY
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" 
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"  xmlns:v="urn:schemas-microsoft-com:vml">
+  <head>
+
+    <title>Google Maps JavaScript API Example: Simple Directions</title>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8"/>
+    <script src="http://maps.google.com/maps?file=api&v=2.x&key=ABQIAAAAzr2EBOXUKnm_jVnk0OJI7xSosDVG8KKPE1-m51RBrvYughuyMxQ-i1QfUnH94QxWIa6N4U6MouMmBA"
+      type="text/javascript"></script>
+    <script> 
+	// Create a directions object and register a map and DIV to hold the 
+    // resulting computed directions
+
+    var map;
+    var directionsPanel;
+    var directions;
+
+    function initialize() {
+		
+      map = new GMap2(document.getElementById("map_canvas"));
+      map.setCenter(new GLatLng(<%= @address.latitude %>, <%= @address.longitude %>), 13);
+      directionsPanel = document.getElementById("route");
+      directions = new GDirections(map, directionsPanel);
+      directions.load("around: <%= "#{@address.pretty_print}" %>");
+
+
+		//var polys = [];
+	  	var pts = [];
+	 	<% @address.time_map({:duration => 300, :angle_stepper => 0.4}).each_with_index do |point, index| %>
+			pts[<%= index %>] = new GLatLng(<%= point.latitude %>, <%= point.longitude %>);
+			map.addOverlay(new GMarker(pts[<%= index %>]));
+	 		
+	    <% end %>
+		pts[pts.length] = pts[0];
+		var polyline = new GPolyline(pts, "#ff0000", 10);
+		map.addOverlay(polyline);
+		var poly = new GPolygon(pts, '#ff0000', 2, .5, '#ff0000', .5);
+	 	//polys.push(poly);
+	 	map.addOverlay(poly);
+		map.addOverlay(new Gmarker(new GLatLng(<%= @address.latitude %> , <%= @address.longitude %>)));
+
+    }
+    </script>
+  </head>
+
+  <body onload="initialize();">
+    <div id="map_canvas" style="width: 70%; height: 480px; float:left; border: 1px solid black;"></div>
+    <div id="route" style="width: 25%; height:480px; float:right; border; 1px solid black;"></div>
+	<div id="duration_time"></div>
+    <br/>
+  </body>
+</html>
